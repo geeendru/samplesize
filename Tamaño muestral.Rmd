@@ -1,0 +1,42 @@
+---
+title: "SAMPLE SIZE"
+author: "Laura Gendra Maneiro"
+date: "2025-12-11"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(longpower)
+
+alpha <- 0.05            
+power_target <- 0.80     
+delta <- 0.6             
+sigma2 <- 1              
+nt <- 4                 
+rho <- 0.5               
+loss_rate <- 0.2         
+
+
+R <- matrix(rho, nrow = nt, ncol = nt)  
+diag(R) <- 1                             
+
+retention <- rep(1 - loss_rate, nt)  
+
+result <- power.mmrm(
+    Ra = R,
+    sigmaa = sqrt(sigma2),
+    delta = delta,
+    power = power_target,
+    sig.level = alpha,
+    ra = retention,
+    alternative = "two.sided"
+)
+
+print(result)
+```
+
