@@ -1,0 +1,114 @@
+---
+title: "Tamaño muestral Alfamov adultos"
+author: "Laura Gendra Maneiro"
+date: "2026-01-14"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(lavaan)
+
+
+alpha <- 0.05         
+power_target <- 0.9  
+loss_rate <- 0.1      
+n_items <- 22        
+
+n_cronbach <- function(alpha_expected = 0.9, alpha_min = 0.8,    
+                       power_target = 0.9, loss_rate = 0.1){
+  z <- qnorm(power_target)
+  n0 <- (z^2 * (1 - alpha_expected)) / (alpha_expected - alpha_min)^2 + 2
+  ceiling(n0 / (1 - loss_rate))
+}
+
+
+n_icc <- function(icc_expected = 0.9, icc_min = 0.8,
+                  power_target = 0.9, alpha = 0.05,
+                  loss_rate = 0.1){
+  z_alpha <- qnorm(1 - alpha/2)
+  z_power <- qnorm(power_target)
+  n0 <- ((z_alpha + z_power)^2 * (1 - icc_min)^2) /
+        (icc_expected - icc_min)^2
+  ceiling(n0 / (1 - loss_rate))
+}
+
+
+n_cfa <- function(n_min = 50, n_max = 600, n_items = 22,
+                  lambda = 0.5, n_rep = 500,
+                  loss_rate = 0.1){
+
+  model <- paste0("F =~ ", paste0("item", 1:n_items, collapse = " + "))
+  n_seq <- seq(n_min, n_max, 10)
+
+  power_rmsea <- numeric(length(n_seq))
+  power_cfi   <- numeric(length(n_seq))
+
+  for(i in seq_along(n_seq)){
+    n_i <- n_seq[i]
+    rmsea_ok <- 0
+    cfi_ok <- 0
+    valid <- 0
+
+    for(r in 1:n_rep){
+
+      F <- rnorm(n_i)
+      dat <- sapply(1:n_items, function(j)
+        lambda * F + rnorm(n_i, sd = sqrt(1 - lambda^2)))
+      dat <- as.data.frame(dat)
+      colnames(dat) <- paste0("item", 1:n_items)
+
+      fit <- try(cfa(model, data = dat, std.lv = TRUE), silent = TRUE)
+
+      if(!inherits(fit, "try-error")){
+        if(lavInspect(fit, "converged")){
+          fm <- fitMeasures(fit, c("rmsea", "cfi"))
+          rmsea_ok <- rmsea_ok + (fm["rmsea"] < 0.05)
+          cfi_ok   <- cfi_ok   + (fm["cfi"]  > 0.95)
+          valid <- valid + 1
+        }
+      }
+    }
+
+    if(valid > 0){
+      power_rmsea[i] <- rmsea_ok / valid
+      power_cfi[i]   <- cfi_ok   / valid
+    } else {
+      power_rmsea[i] <- 0
+      power_cfi[i]   <- 0
+    }
+  }
+
+  ok <- n_seq[power_rmsea >= 0.9 & power_cfi >= 0.9]
+  if(length(ok) == 0) return(NA)
+
+  ceiling(min(ok) / (1 - loss_rate))
+}
+
+analysis <- data.frame(
+  Analysis = c("CFA", "Cronbach", "Test-retest ICC"),
+  n_unadjusted = NA,
+  n_adjusted = NA
+)
+
+analysis$n_unadjusted[analysis$Analysis == "Cronbach"] <-
+  n_cronbach(loss_rate = loss_rate)
+analysis$n_adjusted[analysis$Analysis == "Cronbach"] <-
+  n_cronbach(loss_rate = 0)
+
+analysis$n_unadjusted[analysis$Analysis == "Test-retest ICC"] <-
+  n_icc(loss_rate = loss_rate)
+analysis$n_adjusted[analysis$Analysis == "Test-retest ICC"] <-
+  n_icc(loss_rate = 0)
+
+analysis$n_unadjusted[analysis$Analysis == "CFA"] <-
+  n_cfa(loss_rate = loss_rate)
+analysis$n_adjusted[analysis$Analysis == "CFA"] <-
+  n_cfa(loss_rate = 0)
+
+print(analysis)
+
+```
